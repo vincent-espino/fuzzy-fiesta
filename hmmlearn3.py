@@ -14,7 +14,6 @@ def begin(filePath: str()):
     wordTagOccurrences = dict()
 
     # This is needed for transition probabilities.
-    numberOfSentences = 0
     tagPairs = dict()
     transitionOccurrences = dict()
     transitionDiscoveredTags = dict()
@@ -26,7 +25,6 @@ def begin(filePath: str()):
     # We need the total counts of each tag for transition probabilties.
     # We also need the number of times a particular word was found with a certain tag.
     while sentence:
-        numberOfSentences += 1
         # Split sentences by whitespaces.
         tags = sentence.split()
         # print("Line: ", sentence)
@@ -47,6 +45,20 @@ def begin(filePath: str()):
                 # If we're not at the end of the sentence, make a tuple instead!
                 # Split token and add a tuple to the dictionary of tuples.
                 # tuple = (wordAndTag[1], tags[i + 1].rsplit('/', 1)[1])
+                if i == 0:
+                    # We're at the first token. The POS tag at this particular point can be transitioned to from
+                    # a start start.
+                    tagPair = "start/" + wordAndTag[1]
+                    if tagPair not in tagPairs:
+                        tagPairs[tagPair] = 1
+                    else:
+                        tagPairs[tagPair] += 1
+
+                    if "start" not in transitionDiscoveredTags:
+                        transitionDiscoveredTags["start"] = 1
+                    else:
+                        transitionDiscoveredTags["start"] += 1
+
                 tagPair = wordAndTag[1] + "/" + tags[i + 1].rsplit('/', 1)[1]
                 if tagPair not in tagPairs:
                     tagPairs[tagPair] = 1
@@ -54,18 +66,18 @@ def begin(filePath: str()):
                     tagPairs[tagPair] += 1
 
                 # Keep track of how many times the first tag of the tuple occurs.
-                if wordAndTag[1] not in discoveredTags:
+                # I had a bug here because I checked not in discoveredTags, not transitionDiscoveredTags... be careful!
+                if wordAndTag[1] not in transitionDiscoveredTags:
                     transitionDiscoveredTags[wordAndTag[1]] = 1
                 else:
-                    print("wordAndTag[1]: ", wordAndTag[1])
-                    transitionDiscoveredTags[wordAndTag[1]] = transitionDiscoveredTags[wordAndTag[1]] + 1
+                    transitionDiscoveredTags[wordAndTag[1]] += 1
 
             # Get the number of times each tag occurs. This is needed for the denominator portion
             # when calculating transition probabilities.
             if wordAndTag[1] not in discoveredTags:
                 discoveredTags[wordAndTag[1]] = 1
             else:
-                discoveredTags[wordAndTag[1]] = discoveredTags[wordAndTag[1]] + 1
+                discoveredTags[wordAndTag[1]] += 1
 
         sentence = file.readline()
 
@@ -92,14 +104,10 @@ def begin(filePath: str()):
     # The following computes the transition probabilities.
     # For each tuple, divide the number of times the tuple occurs
     # by the number of times the first portion of the tuple occurred.
-    # Starting transitions are easier: divide the number of times a starting tag
-    # occurs by the number of given sentences.
 
     for pair in tagPairs:
         # print("tagPairs[pair] has count: ", tagPairs[pair])
         splitTags = pair.rsplit("/", 1)
-        # print("leading tag is ", splitTags[0])
-        # print("total times of first tags occurrence: ", transitionDiscoveredTags[splitTags[0]])
         transitionOccurrences[pair] = tagPairs[pair] / transitionDiscoveredTags[splitTags[0]]
 
     # print("Done parsing. Creating file.")
@@ -112,9 +120,6 @@ def begin(filePath: str()):
     learnedProbabilities.append(transitionProbabilities)
     # Pretty print the JSON a bit! ensure_ascii=False to print in UTF-8.
     json.dump(learnedProbabilities, model, indent=4, ensure_ascii=False)
-
-
-
 
 # Open the file for processing.
 if len(sys.argv) == 0:
