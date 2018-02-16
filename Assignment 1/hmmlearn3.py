@@ -14,7 +14,6 @@ def begin(filePath: str()):
     wordTagOccurrences = dict()
 
     # This is needed for transition probabilities.
-    tagPairs = dict()
     transitionOccurrences = dict()
     transitionDiscoveredTags = dict()
 
@@ -47,23 +46,33 @@ def begin(filePath: str()):
                 # tuple = (wordAndTag[1], tags[i + 1].rsplit('/', 1)[1])
                 if i == 0:
                     # We're at the first token. The POS tag at this particular point can be transitioned to from
-                    # a start start.
-                    tagPair = "start/" + wordAndTag[1]
-                    if tagPair not in tagPairs:
-                        tagPairs[tagPair] = 1
+                    # a start state.
+                    # { "start": { "VB" : 0.2, "NN" : 0.8 }}
+                    if "start" not in transitionOccurrences:
+                        transitionOccurrences["start"] = dict()
+                        transitionOccurrences["start"][wordAndTag[1]] = 1
                     else:
-                        tagPairs[tagPair] += 1
+                        if wordAndTag[1] not in transitionOccurrences["start"]:
+                            transitionOccurrences["start"][wordAndTag[1]] = 1
+                        else:
+                            transitionOccurrences["start"][wordAndTag[1]] += 1
+
+                    # This code is fine for the new method, just needs slight modification
+                    # to correctly increment newly discovered start tags.
 
                     if "start" not in transitionDiscoveredTags:
                         transitionDiscoveredTags["start"] = 1
                     else:
                         transitionDiscoveredTags["start"] += 1
 
-                tagPair = wordAndTag[1] + "/" + tags[i + 1].rsplit('/', 1)[1]
-                if tagPair not in tagPairs:
-                    tagPairs[tagPair] = 1
+                if wordAndTag[1] not in transitionOccurrences:
+                    transitionOccurrences[wordAndTag[1]] = dict()
+                    transitionOccurrences[wordAndTag[1]][tags[i + 1].rsplit('/', 1)[1]] = 1
                 else:
-                    tagPairs[tagPair] += 1
+                    if tags[i + 1].rsplit('/', 1)[1] not in transitionOccurrences[wordAndTag[1]]:
+                        transitionOccurrences[wordAndTag[1]][tags[i + 1].rsplit('/', 1)[1]] = 1
+                    else:
+                        transitionOccurrences[wordAndTag[1]][tags[i + 1].rsplit('/', 1)[1]] += 1
 
                 # Keep track of how many times the first tag of the tuple occurs.
                 # I had a bug here because I checked not in discoveredTags, not transitionDiscoveredTags... be careful!
@@ -105,10 +114,17 @@ def begin(filePath: str()):
     # For each tuple, divide the number of times the tuple occurs
     # by the number of times the first portion of the tuple occurred.
 
-    for pair in tagPairs:
-        # print("tagPairs[pair] has count: ", tagPairs[pair])
-        splitTags = pair.rsplit("/", 1)
-        transitionOccurrences[pair] = tagPairs[pair] / transitionDiscoveredTags[splitTags[0]]
+    for transition in transitionOccurrences:
+        print("transition is ", transition)
+        for state in transitionOccurrences[transition]:
+            print("state is ", state)
+            print("transitionOccurrences[transition][state]: ", transitionOccurrences[transition][state])
+            print("transitionDiscoveredTags[state]: ", transitionDiscoveredTags[state])
+            transitionOccurrences[transition][state] = transitionOccurrences[transition][state] / transitionDiscoveredTags[transition]
+    # for pair in tagPairs:
+    #     # print("tagPairs[pair] has count: ", tagPairs[pair])
+    #     splitTags = pair.rsplit("/", 1)
+    #     transitionOccurrences[pair] = tagPairs[pair] / transitionDiscoveredTags[splitTags[0]]
 
     # print("Done parsing. Creating file.")
     model = open("hmmmodel.txt", "w+")
