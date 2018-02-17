@@ -1,11 +1,40 @@
 import sys
 import json
-import numpy
+
+# Dictionaries can only have one instace of a particular key. Using them is causing issues when using the backpointers.
+def decode(backpointers: list, words: list()) -> list():
+    sequence = list()
+    if len(words) >= 2:
+        lastword = words[len(words) - 1]
+        lastTransitionDict = backpointers[len(words) - 1][lastword]
+        lastTransition = list(lastTransitionDict.keys())[0]
+        sequence.append(lastTransition)
+        temp = list(lastTransitionDict[list(lastTransitionDict.keys())[0]])[0]
+        for entry in reversed(backpointers):
+            sequence.append(temp)
+            temp = list(entry[list(entry.keys())[0]])[0]
+            print(entry)
+
+    return sequence
+
+    # lastword = words[len(words) - 1]
+    # words.remove(lastword)
+    # lastWordTransitions = backpointers[len(words)]
+    # lastTransition = list(lastWordTransitions.keys())[0]
+    # penultimateTransition = list(lastWordTransitions[list(lastWordTransitions.keys())[0]])[0]
+    # sequence.append(lastTransition)
+    # sequence.append(penultimateTransition)
+    # temp = penultimateTransition
+    # for word in reversed(words):
+    #     transition = list(backpointers[word][temp].keys())[0]
+    #     sequence.append(transition)
+    #     temp = transition
+    # sequence.remove("start")
+    # words.append(lastword)
 
 # Note: the output file from this program should be named hmmoutput.txt.
 def begin(filePath: str()):
     # Print out the file path. This should be the untagged test data for which the tagger will attempt to tag.
-    print("File path is ", filePath)
     untaggedWords = open(filePath, 'r')
     modelFile = open("hmmmodel.txt", "r")
     model = json.load(modelFile)
@@ -13,69 +42,62 @@ def begin(filePath: str()):
 
     emissionProbabilities = model[0]['emissionProbabilities']
     transitionProbabilities = model[1]['transitionProbabilities']
-    print("Model loaded.")
 
-    # Dictionary of backpointers. The main keys are each word.
-    # Each word contains keys, which themselves are POS tags that point to dictionaries which
-    # contain the state they can be reached from along the probability of getting to them from that state.
-    # Ultimately, we want a dictionary that looks like the following:
-    # {
-    #     "time": {"VB": {"start": 0.02},
-    #              "NN": {"start": 0.08}},
-    #     "flies": {"VB": {"NN": 0.0064},
-    #               "NN": {"NN": .004}}
-    #     etc, etc.
-    # }
-    backpointers = dict()
-
+    taggedSequences = list()
     sentence = untaggedWords.readline()
 
     while sentence:
-        print("Line from file: ", sentence)
+        backpointers = list()
         words = sentence.split()
-
         for i in range(len(words)):
             # Grab tags for a word.
             possibleTags = emissionProbabilities[words[i]]
 
             # If this is the first tag in the sequences, consider starting probabilities AND probabilities from the first sequences to the next.
+            probabilityDict = dict()
             if i == 0:
                 for possibleTag in possibleTags:
-                    print("possibleTag: ", possibleTag)
                     if possibleTag in transitionProbabilities["start"]:
                         # Still need checks for if a word/tag isn't found. Worry about that later.
                         # If using log probabilities, try this:
                         # probabilities[tag] = numpy.log(transitionProbabilities["start"][tag] * emissionProbabilities[words[i]][tag])
                         probability = transitionProbabilities["start"][possibleTag] * emissionProbabilities[words[i]][possibleTag]
-                        if words[i] not in backpointers:
-                            backpointers[words[i]] = dict()
-                            backpointers[words[i]][possibleTag] = {"start": probability}
-                        else:
-                            if possibleTag not in backpointers[words[i]]:
-                                backpointers[words[i]][possibleTag] = {"start": probability}
+                        probabilityDict[possibleTag] = {"start": probability}
+                backpointers.append({ words[i] : probabilityDict})
             else:
                 previousTransitionTags = emissionProbabilities[words[i - 1]]
                 previousWord = words[i - 1]
-                for possibleTag in possibleTags:
-                    print("possible tag, i > 0: ", possibleTag)
-                    for tag in previousTransitionTags:
-                        if possibleTag in transitionProbabilities[tag]:
-                            if possibleTag == "IN":
-                                print("Uh oh")
-                            valueList = list(backpointers[previousWord][tag].values())
-                            probability = valueList[0] * emissionProbabilities[words[i]][possibleTag] * transitionProbabilities[tag][possibleTag]
-                            if words[i] not in backpointers:
-                                backpointers[words[i]] = dict()
-                                backpointers[words[i]][possibleTag] = {tag:probability}
+                print("current word: ", words[i])
+                for possibleTag in possibleTags: # PossibleTags are the emission probabilities for the current word. Use previousTransitionTags?
+                    for previousTag in previousTransitionTags:
+                        if possibleTag in transitionProbabilities[previousTag]:
+                            print("possibleTag: ", possibleTag, ", previousTag: ", previousTag)
+                            value = list(backpointers[i - 1][previousWord][previousTag].values())[0]
+                            # print("value: ", value)
+                            # print("emissionProbabilities[words[i]][possibleTag]: ", emissionProbabilities[words[i]][possibleTag])
+                            # print("transitionProbabilities[possibleTag]: ", transitionProbabilities[previousTag][possibleTag])
+                            probability = value * emissionProbabilities[words[i]][possibleTag] * transitionProbabilities[previousTag][possibleTag]
+                            print("probability: ", probability)
+                            if possibleTag not in probabilityDict:
+                                probabilityDict[possibleTag] = {previousTag: probability}
                             else:
-                                if possibleTag not in backpointers[words[i]]:
-                                    backpointers[words[i]][possibleTag] = {tag:probability}
+                                probabilityDict[possibleTag][previousTag] = {previousTag: probability}
+                # Compute all the probabilities from possibleTag to each previousTag. keep the highest one; this is the backpointer.
 
 
+                backpointers.append({ words[i] : probabilityDict})
+        mostLikelySequence = reversed(decode(backpointers, words))
+        index = 0
+        taggedSequence = str()
+        for tag in mostLikelySequence:
+            if index + 1 < len(words):
+                taggedSequence += words[index] + "/" + tag + " "
+            else:
+                taggedSequence += words[index] + "/" + tag
+            index += 1
+        print("tagged sequence is ", taggedSequence)
         sentence = untaggedWords.readline()
     untaggedWords.close()
-
-    print("Done reading file.")
 
 # Open the model for processing. Open a file called hmmmodel.txt
 if len(sys.argv) == 0:
@@ -111,3 +133,32 @@ else:
 #     print("transitionProbabilities[possibleTag][possibleTransitionTag]: ",
 #           transitionProbabilities[possibleTag][possibleTransitionTag])
 #     probabilities[possibleTag] = probabilities[possibleTag] * emissionProbabilities[words[i + 1]][possibleTransitionTag] * transitionProbabilities[possibleTag][possibleTransitionTag]
+
+
+# More throwaway...
+# if possibleTag in transitionProbabilities[tag]:
+#     # valueList = list(backpointers[previousWord][tag].values())
+#     value = list(backpointers[i - 1][previousWord][tag].values())[0]
+#     print("previous probability: ", value)
+#     print("emissionProbabilities[words[i]][possibleTag]: ", emissionProbabilities[words[i]][possibleTag])
+#     print("transitionProbabilities[tag][possibleTag]: ", transitionProbabilities[tag][possibleTag])
+#     probability = value * emissionProbabilities[words[i]][possibleTag] * transitionProbabilities[tag][possibleTag]
+#     # This is faulty. We want duplicates of words.
+#     if tag not in probabilityDict:
+#         probabilityDict[possibleTag] = {tag: probability}
+#     else:
+#         if possibleTag not in probabilityDict[tag]:
+#             probabilityDict[possibleTag] = {tag: probability}
+#         else:
+#             probabilityDict[possibleTag][tag] = {tag: probability}
+
+# allPrevious = list()
+# for previousTag in previousTransitionTags:
+#     print("possibleTag: ", possibleTag, ", previousTag: ", previousTag)
+#     value = list(backpointers[i - 1][previousWord][previousTag].values())[0]
+#     probability = value * previousTransitionTags[previousTag] * emissionProbabilities[words[i]][possibleTag]
+#     print("computed probability: ", probability)
+#     if possibleTag not in probabilityDict:
+#         probabilityDict[possibleTag] = {previousTag: probability}
+#     else:
+#         probabilityDict[possibleTag][previousTag] = {previousTag: probability}
