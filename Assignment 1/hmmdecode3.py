@@ -13,6 +13,10 @@ def getProbability(possibleState: str(), time: int) -> float:
 
 def getMostProbableStateSequence(backpointers: dict(), time: int) -> list:
     sequence = list()
+    # Note that it's possible for a time of 1 to still have multiple backpointer entries.
+    if backpointers.__len__() == 1:
+        sequence.append(list(backpointers.keys())[0][0])
+        return sequence
     if time == 1:
         sequence.append(list(backpointers.keys())[0][0])
         return sequence
@@ -48,6 +52,8 @@ def begin(filePath: str()):
     modelFile = open("hmmmodel.txt", "r")
     model = json.load(modelFile)
     modelFile.close()
+
+    outputFile = open("hmmoutput.txt", "w")
 
     global emissionProbabilities
     emissionProbabilities = model[0]['emissionProbabilities']
@@ -114,20 +120,31 @@ def begin(filePath: str()):
                 backpointers[highestTuple] = highestState
                 probabilities[highestTuple] = maxProbability
 
-        mostLikelySequence = reversed(getMostProbableStateSequence(backpointers, time))
-        index = 0
-        taggedSequence = str()
-        for tag in mostLikelySequence:
-            if index + 1 < len(words):
-                taggedSequence += words[index] + "/" + tag + " "
-            else:
-                taggedSequence += words[index] + "/" + tag
-            index += 1
-        print("tagged sequence is ", taggedSequence)
+        mostLikelySequence = list()
+        if backpointers.__len__() == 0:
+            possibleProbabilities = emissionProbabilities[words[0]]
+            sortedProbabilities = sorted(possibleProbabilities.items(), key=operator.itemgetter(1))
+            highestProbability = sortedProbabilities[len(sortedProbabilities) - 1]
+            mostLikelySequence.append(highestProbability[0])
+            taggedSequence = str()
+            taggedSequence = words[0] + "/" + highestProbability[0] + "\n"
+        else:
+            mostLikelySequence = reversed(getMostProbableStateSequence(backpointers, time))
+            index = 0
+            taggedSequence = str()
+            for tag in mostLikelySequence:
+                if index + 1 < len(words):
+                    taggedSequence += words[index] + "/" + tag + " "
+                else:
+                    taggedSequence += words[index] + "/" + tag + "\n"
+                index += 1
+        # print("tagged sequence is ", taggedSequence)
+        outputFile.write(taggedSequence)
         sentence = untaggedWords.readline()
         backpointers.clear()
         probabilities.clear()
     untaggedWords.close()
+    outputFile.close()
 
 # Open the model for processing. Open a file called hmmmodel.txt
 if len(sys.argv) == 0:
