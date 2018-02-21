@@ -1,5 +1,7 @@
 import sys
 import json
+import numpy
+import math
 
 # File should be of the name hmmmodel.txt
 def begin(filePath: str()):
@@ -23,9 +25,12 @@ def begin(filePath: str()):
     # Else if the word was encountered, increment its count by 1.
     # We need the total counts of each tag for transition probabilties.
     # We also need the number of times a particular word was found with a certain tag.
+    count = 0
     while sentence:
+        count += 1
         # Split sentences by whitespaces.
         tags = sentence.split()
+        tags.insert(0, "dummy/start")
         # print("Line: ", sentence)
         numTags = len(tags)
         for i in range(0, numTags):
@@ -39,31 +44,36 @@ def begin(filePath: str()):
             # Split the token by the last occurring slash, which we are told is the separator between
             # word and its part of speech tag.
             wordAndTag = tags[i].rsplit('/', 1)
+            # start -> NNP should have a count of 1455.
+
+            # Get the number of times each tag occurs. This is needed for the denominator portion
+            # when calculating transition probabilities.
+            if wordAndTag[1] not in discoveredTags:
+                discoveredTags[wordAndTag[1]] = discoveredTags.get(wordAndTag[1], 0) + 1
+            else:
+                discoveredTags[wordAndTag[1]] += 1
 
             if(i + 1 < numTags):
                 # If we're not at the end of the sentence, make a tuple instead!
                 # Split token and add a tuple to the dictionary of tuples.
                 # tuple = (wordAndTag[1], tags[i + 1].rsplit('/', 1)[1])
-                if i == 0:
-                    # We're at the first token. The POS tag at this particular point can be transitioned to from
-                    # a start state.
-                    # { "start": { "VB" : 0.2, "NN" : 0.8 }}
-                    if "start" not in transitionOccurrences:
-                        transitionOccurrences["start"] = dict()
-                        transitionOccurrences["start"][wordAndTag[1]] = 1
-                    else:
-                        if wordAndTag[1] not in transitionOccurrences["start"]:
-                            transitionOccurrences["start"][wordAndTag[1]] = 1
-                        else:
-                            transitionOccurrences["start"][wordAndTag[1]] += 1
-
-                    # This code is fine for the new method, just needs slight modification
-                    # to correctly increment newly discovered start tags.
-
-                    if "start" not in transitionDiscoveredTags:
-                        transitionDiscoveredTags["start"] = 1
-                    else:
-                        transitionDiscoveredTags["start"] += 1
+                # if i == 0:
+                #     # We're at the first token. The POS tag at this particular point can be transitioned to from
+                #     # a start state.
+                #     # { "start": { "VB" : 0.2, "NN" : 0.8 }}
+                #     if "start" not in transitionOccurrences:
+                #         transitionOccurrences["start"] = dict()
+                #         transitionOccurrences["start"][wordAndTag[1]] = 1
+                #     else:
+                #         if wordAndTag[1] not in transitionOccurrences["start"]:
+                #             transitionOccurrences["start"][wordAndTag[1]] = 1
+                #         else:
+                #             transitionOccurrences["start"][wordAndTag[1]] += 1
+                #
+                #     if "start" not in transitionDiscoveredTags:
+                #         transitionDiscoveredTags["start"] = 1
+                #     else:
+                #         transitionDiscoveredTags["start"] += 1
 
                 if wordAndTag[1] not in transitionOccurrences:
                     transitionOccurrences[wordAndTag[1]] = dict()
@@ -80,13 +90,6 @@ def begin(filePath: str()):
                     transitionDiscoveredTags[wordAndTag[1]] = 1
                 else:
                     transitionDiscoveredTags[wordAndTag[1]] += 1
-
-            # Get the number of times each tag occurs. This is needed for the denominator portion
-            # when calculating transition probabilities.
-            if wordAndTag[1] not in discoveredTags:
-                discoveredTags[wordAndTag[1]] = 1
-            else:
-                discoveredTags[wordAndTag[1]] += 1
 
         sentence = file.readline()
 
@@ -114,13 +117,17 @@ def begin(filePath: str()):
     # For each tuple, divide the number of times the tuple occurs
     # by the number of times the first portion of the tuple occurred.
 
-    for transition in transitionOccurrences:
-        print("transition is ", transition)
-        for state in transitionOccurrences[transition]:
-            print("state is ", state)
-            print("transitionOccurrences[transition][state]: ", transitionOccurrences[transition][state])
-            print("transitionDiscoveredTags[state]: ", transitionDiscoveredTags[state])
-            transitionOccurrences[transition][state] = transitionOccurrences[transition][state] / transitionDiscoveredTags[transition]
+    newDenom = numpy.square(discoveredTags.__len__() - 1) + 2 * (discoveredTags.__len__() - 1)
+    for firstTag in discoveredTags.keys():
+        for secondTag in discoveredTags.keys():
+            # transitionOccurrences[firstTag]
+            firstLevel = transitionOccurrences.get(firstTag, {})
+            frequency = firstLevel.get(secondTag, 0)
+            tempResult = (frequency + 1) / (sum(firstLevel.values()) + newDenom)
+            # tempResult = math.log(frequency + 1, 2) - math.log(sum(firstLevel.values()) + newDenom, 2)
+            tempDict = transitionOccurrences.get(firstTag, {})
+            tempDict[secondTag] = tempResult
+            transitionOccurrences[firstTag] = tempDict
     # for pair in tagPairs:
     #     # print("tagPairs[pair] has count: ", tagPairs[pair])
     #     splitTags = pair.rsplit("/", 1)
