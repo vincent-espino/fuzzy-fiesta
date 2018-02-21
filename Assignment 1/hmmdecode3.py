@@ -17,7 +17,7 @@ def getMostProbableStateSequence(backpointers: dict(), time: int) -> list:
     if backpointers.__len__() == 1:
         sequence.append(list(backpointers.keys())[0][0])
         return sequence
-    if time == 1:
+    elif time == 1:
         sequence.append(list(backpointers.keys())[0][0])
         return sequence
     lastPointers = dict()
@@ -38,6 +38,8 @@ def getMostProbableStateSequence(backpointers: dict(), time: int) -> list:
         if time > 0:
             temp = (penultimateTransition, time)
             sequence.append(temp[0])
+            if temp not in backpointers:
+                print("uhoh")
             penultimateTransition = backpointers[temp]
         else:
             break
@@ -67,25 +69,23 @@ def begin(filePath: str()):
     # backpointers = dict()
     # global probabilities
     # probabilities = dict()
+    probabilities['start'] = 1.0
 
     while sentence:
         words = sentence.split()
-        # Viterbi algorithm
+        # Viterbi algorithm!
 
         # Initialization step. States are tags, observations are words.
         startTransitionProbabilities = transitionProbabilities["start"]
         time = 1
-        for possibleState in emissionProbabilities[words[0]]:
+        for possibleState in emissionProbabilities.get(words[0], emissionProbabilities.keys()):
             # Question: Is it possible that a first word will have been seen with a state not considered as a start state?
-            # if words[0] == "\"":
-            #     print()
-            # print("emissionProbabilities[words[0]][possibleState]: ", emissionProbabilities[words[0]][possibleState])
-            # print("startTransitionProbabilities[possibleState]: ", startTransitionProbabilities[possibleState])
-            # probability = startTransitionProbabilities[possibleState] * emissionProbabilities[words[0]][possibleState]
-            # {}.get(k, 0)
             if possibleState in startTransitionProbabilities:
                 tuple = (possibleState, time)
-                probability = startTransitionProbabilities[possibleState] * emissionProbabilities[words[0]][possibleState]
+                tempDict = emissionProbabilities.get(words[0], {})
+                # temp.get(possibleState, 1)
+                # probability = startTransitionProbabilities[possibleState] * emissionProbabilities[words[0]][possibleState]
+                probability = startTransitionProbabilities[possibleState] * tempDict.get(possibleState, 1)
                 probabilities[tuple] = probability
                 backpointers[tuple] = "start"
         # End init step.
@@ -95,26 +95,43 @@ def begin(filePath: str()):
         for index in range(index, len(words)):
             currentWord = words[index]
             previousWord = words[index - 1]
-            possibleStates = emissionProbabilities[currentWord]
-            previousTransitionStates = emissionProbabilities[previousWord]
+            wordSeen = True
+            if currentWord not in emissionProbabilities:
+                wordSeen = False
+            else:
+                possibleStates = emissionProbabilities[currentWord].keys()
+                # previousTransitionStates = emissionProbabilities.get(previousWord, transitionProbabilities.keys())
             time += 1 # Might need to move this?
             for possibleState in possibleStates:
                 maxProbability = 0.0
                 highestState = ""
-                for possiblePreviousState in previousTransitionStates:
+                for possiblePreviousState in emissionProbabilities.get(previousWord, transitionProbabilities.keys()):
                     # If such a transition doesn't exist, do not record it. This might require smoothing?
-                    if possibleState in transitionProbabilities[possiblePreviousState]:
-                        # print("Previous state ", possiblePreviousState, " to current state ", possibleState, ".")
-                        highestProbability = getProbability(possiblePreviousState, time - 1)
-                        # print("Transition probability: ", transitionProbabilities[possiblePreviousState][possibleState])
-                        # print("Emission probability: ", emissionProbabilities[currentWord][possibleState])
+                    # Smoothing occurs in learning! Do not do it here!
+                    # I think this check can be removed later on.
+                    # print("Previous state ", possiblePreviousState, " to current state ", possibleState, ".")
+                    # highestProbability = getProbability(possiblePreviousState, time - 1)
+                    highestProbability = probabilities.get((possiblePreviousState, time - 1), 0)
+                    # print("Transition probability: ", transitionProbabilities[possiblePreviousState][possibleState])
+                    # print("previousState: ", possiblePreviousState, " nextState: ", possibleState)
+                    # print("Emission probability: ", emissionProbabilities[currentWord][possibleState])
+                    # The reference solution, for unknown tokens in the test data,
+                    # will ignore the emission probabilities and use the transition probabilities alone.
+                    if wordSeen:
                         probability = highestProbability * transitionProbabilities[possiblePreviousState][possibleState] * emissionProbabilities[currentWord][possibleState]
-                        # print("computed probability: ", probability)
-                        if probability > maxProbability:
-                            # print("old max: ", maxProbability)
-                            maxProbability = probability
-                            # print("New higher probability found: ", maxProbability)
-                            highestState = possiblePreviousState
+                    else:
+                        probability = highestProbability * transitionProbabilities[possiblePreviousState][possibleState]
+
+                    # print("computed probability: ", probability)
+                    if probability > maxProbability:
+                        # print("old max: ", maxProbability)
+                        maxProbability = probability
+                        # print("New higher probability found: ", maxProbability)
+                        highestState = possiblePreviousState
+
+                        # print("Highest previous probability for state ", possibleState, " found was ", maxProbability,
+                        #       " by state ", highestState)
+
                 # print("Highest previous probability for state ", possibleState, " found was ", maxProbability, " by state ", highestState)
                 highestTuple = (possibleState, time)
                 backpointers[highestTuple] = highestState
